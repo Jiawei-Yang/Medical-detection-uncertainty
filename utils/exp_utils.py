@@ -112,7 +112,7 @@ def prep_exp(dataset_path, exp_path, server_env, use_stored_settings=True, is_tr
     cf.plot_dir = os.path.join(cf.exp_dir, 'plots')
     cf.experiment_name = exp_path.split("/")[-1]
     cf.server_env = server_env
-    cf.created_fold_id_pickle = True
+    cf.created_fold_id_pickle = False
 
     return cf
 

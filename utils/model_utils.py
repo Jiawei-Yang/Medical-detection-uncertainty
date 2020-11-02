@@ -272,32 +272,26 @@ def generate_anchors_3D(scales_xy, scales_z, ratios, shape, feature_stride_xy, f
     return boxes
 
 
-def generate_pyramid_anchors(logger):
+def generate_pyramid_anchors(logger, cf):
     """Generate anchors at different levels of a feature pyramid. Each scale
     is associated with a level of the pyramid, but each ratio is used in
     all levels of the pyramid.
 
     from configs:
-    :param scales: RPN_ANCHOR_SCALES , e.g. [4, 8, 16, 32]
-    :param ratios: RPN_ANCHOR_RATIOS , e.g. [0.5, 1, 2]
-    :param feature_shapes: BACKBONE_SHAPES , e.g.  [array of shapes per feature map] [80, 40, 20, 10, 5]
-    :param feature_strides: BACKBONE_STRIDES , e.g. [2, 4, 8, 16, 32, 64]
-    :param anchors_stride: RPN_ANCHOR_STRIDE , e.g. 1
+    :param scales: cf.RPN_ANCHOR_SCALES , e.g. [4, 8, 16, 32]
+    :param ratios: cf.RPN_ANCHOR_RATIOS , e.g. [0.5, 1, 2]
+    :param feature_shapes: cf.BACKBONE_SHAPES , e.g.  [array of shapes per feature map] [80, 40, 20, 10, 5]
+    :param feature_strides: cf.BACKBONE_STRIDES , e.g. [2, 4, 8, 16, 32, 64]
+    :param anchors_stride: cf.RPN_ANCHOR_STRIDE , e.g. 1
     :return anchors: (N, (y1, x1, y2, x2, (z1), (z2)). All generated anchors in one array. Sorted
     with the same order of the given scales. So, anchors of scale[0] come first, then anchors of scale[1], and so on.
     """
-    scales = {'xy': [[8], [16], [32], [64]], 'z': [[2], [4], [8], [16]]}
-    ratios = [1]
-    patch_size = [288,288]
-    backbone_strides = {'xy': [4, 8, 16, 32]}
-    feature_shapes = np.array(
-                [[int(np.ceil(patch_size[0] / stride)),
-                  int(np.ceil(patch_size[1] / stride))]
-                 for stride in backbone_strides['xy']])
-
-    anchor_stride = 1
-    pyramid_levels = [0, 1, 2, 3]
-    feature_strides = backbone_strides
+    scales = cf.rpn_anchor_scales
+    ratios = cf.rpn_anchor_ratios
+    feature_shapes = cf.backbone_shapes
+    anchor_stride = cf.rpn_anchor_stride
+    pyramid_levels = cf.pyramid_levels
+    feature_strides = cf.backbone_strides
 
     anchors = []
     logger.info("feature map shapes: {}".format(feature_shapes))
@@ -508,7 +502,7 @@ def bbox_overlaps_3D(boxes1, boxes2):
 
 
 
-def gt_anchor_matching(anchors, gt_boxes, gt_class_ids=None):
+def gt_anchor_matching(cf, anchors, gt_boxes, gt_class_ids=None):
     """Given the anchors and GT boxes, compute overlaps and identify positive
     anchors and deltas to refine them to match their corresponding GT boxes.
 
@@ -524,12 +518,10 @@ def gt_anchor_matching(anchors, gt_boxes, gt_class_ids=None):
                class_ids as positive anchor values, i.e. values >= 1!
     anchor_delta_targets: [N, (dy, dx, (dz), log(dh), log(dw), (log(dd)))] Anchor bbox deltas.
     """
-    rpn_train_anchors_per_image = 6  #per batch element 
-    anchor_matching_iou = 0.7
-    rpn_bbox_std_dev = np.array([0.1, 0.1, 0.1, 0.2])
 
     anchor_class_matches = np.zeros([anchors.shape[0]], dtype=np.int32)
-    anchor_delta_targets = np.zeros((rpn_train_anchors_per_image, 4))
+    anchor_delta_targets = np.zeros((cf.rpn_train_anchors_per_image, 2*cf.dim))
+    anchor_matching_iou = cf.anchor_matching_iou
 
     if gt_boxes is None:
         anchor_class_matches = np.full(anchor_class_matches.shape, fill_value=-1)
@@ -572,7 +564,7 @@ def gt_anchor_matching(anchors, gt_boxes, gt_class_ids=None):
 
     # Subsample to balance positive anchors.
     ids = np.where(anchor_class_matches > 0)[0]
-    extra = len(ids) - (rpn_train_anchors_per_image // 2)
+    extra = len(ids) - (cf.rpn_train_anchors_per_image // 2)
     if extra > 0:
         # Reset the extra ones to neutral
         ids = np.random.choice(ids, extra, replace=False)
@@ -597,17 +589,31 @@ def gt_anchor_matching(anchors, gt_boxes, gt_class_ids=None):
         a_center_y = a[0] + 0.5 * a_h
         a_center_x = a[1] + 0.5 * a_w
 
-        
-        anchor_delta_targets[ix] = [
+        if cf.dim == 2:
+            anchor_delta_targets[ix] = [
                 (gt_center_y - a_center_y) / a_h,
                 (gt_center_x - a_center_x) / a_w,
                 np.log(gt_h / a_h),
                 np.log(gt_w / a_w),
             ]
 
+        else:
+            gt_d = gt[5] - gt[4]
+            gt_center_z = gt[4] + 0.5 * gt_d
+            a_d = a[5] - a[4]
+            a_center_z = a[4] + 0.5 * a_d
+
+            anchor_delta_targets[ix] = [
+                (gt_center_y - a_center_y) / a_h,
+                (gt_center_x - a_center_x) / a_w,
+                (gt_center_z - a_center_z) / a_d,
+                np.log(gt_h / a_h),
+                np.log(gt_w / a_w),
+                np.log(gt_d / a_d)
+            ]
+
         # normalize.
-        
-        anchor_delta_targets[ix] /= rpn_bbox_std_dev
+        anchor_delta_targets[ix] /= cf.rpn_bbox_std_dev
         ix += 1
 
     return anchor_class_matches, anchor_delta_targets
@@ -691,7 +697,7 @@ def initialize_weights(net):
    Initialize model weights. Current Default in Pytorch (version 0.4.1) is initialization from a uniform distriubtion.
    Will expectably be changed to kaiming_uniform in future versions.
    """
-    init_type = 'kaiming_uniform'
+    init_type = net.cf.weight_init
 
     for m in [module for module in net.modules() if type(module) in [nn.Conv2d, nn.Conv3d,
                                                                      nn.ConvTranspose2d,
@@ -708,14 +714,14 @@ def initialize_weights(net):
                 m.bias.data.zero_()
 
         elif init_type == "kaiming_uniform":
-            nn.init.kaiming_uniform_(m.weight.data, mode='fan_out', nonlinearity='relu', a=0)
+            nn.init.kaiming_uniform_(m.weight.data, mode='fan_out', nonlinearity=net.cf.relu, a=0)
             if m.bias is not None:
                 fan_in, fan_out = nn.init._calculate_fan_in_and_fan_out(m.weight.data)
                 bound = 1 / np.sqrt(fan_out)
                 nn.init.uniform_(m.bias, -bound, bound)
 
         elif init_type == "kaiming_normal":
-            nn.init.kaiming_normal_(m.weight.data, mode='fan_out', nonlinearity='relu', a=0)
+            nn.init.kaiming_normal_(m.weight.data, mode='fan_out', nonlinearity=net.cf.relu, a=0)
             if m.bias is not None:
                 fan_in, fan_out = nn.init._calculate_fan_in_and_fan_out(m.weight.data)
                 bound = 1 / np.sqrt(fan_out)
@@ -730,7 +736,7 @@ class NDConvGenerator(object):
     def __init__(self, dim):
         self.dim = dim
 
-    def __call__(self, c_in, c_out, ks, pad=0, stride=1, norm=None, relu='relu',dropout_op=None,dropout_p=0):
+    def __call__(self, c_in, c_out, ks, pad=0, stride=1, norm=None, relu='relu'):
         """
         :param c_in: number of in_channels.
         :param c_out: number of out_channels.
@@ -742,7 +748,7 @@ class NDConvGenerator(object):
         :return: convolved feature_map.
         """
         if self.dim == 2:
-            conv = nn.Conv2d(c_in, c_out, kernel_size=ks, padding=pad, stride=stride, )
+            conv = nn.Conv2d(c_in, c_out, kernel_size=ks, padding=pad, stride=stride)
             if norm is not None:
                 if norm == 'instance_norm':
                     norm_layer = nn.InstanceNorm2d(c_out)
@@ -771,17 +777,7 @@ class NDConvGenerator(object):
             else:
                 raise ValueError('relu type as specified in configs is not implemented...')
             conv = nn.Sequential(conv, relu_layer)
-        
-        if dropout_op is not None:
-            if dropout_op =='dropout':
-                dropout_layer = nn.Dropout(p=dropout_p,inplace=True)
-            elif self.dim == 2 and dropout_op=='dropout2d':
-                dropout_layer = nn.Dropout2d(p=dropout_p,inplace=True)
-            elif self.dim == 3 and dropout_op=='dropout3d':
-                dropout_layer = nn.Dropout3d(p=dropout_p,inplace=True)
-            else:
-                raise ValueError('relu type as specified in configs is not implemented...')
-            conv = nn.Sequential(conv, dropout_layer)
+
         return conv
 
 
