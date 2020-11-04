@@ -20,6 +20,9 @@ Install PyTorch by following the [official guidance](https://pytorch.org/).
 
 Install XXX, which is a XXX library designed for computer vision research, by following the [official guidance](https://XXX).
 
+### Step 3: Run inference and training 
+XXX 
+
 
 ## Model Overview
 
@@ -35,6 +38,6 @@ The base detector implementation is adapted from an existing work that achieves 
 
 
 ## Notes
-1. Since the privacy issue and commercial interest, the trained models and training images are not released at the moment. Request for the data should be made to liangyuandg@ucla.edu and will be considered according to the purpose of usage. By following the instructions above, new models can be trained on any individual's repository of data. 
+1. The method of enabling instance-level uncertainty can be applied to any ConvNet as the base detecotr. 
 2. More details about training strategy, model architecture descriptions, and result discussion will be released in a future publication.
 
