@@ -28,7 +28,7 @@ class configs:
         #########################
         #    Preprocessing      #
         #########################
-        self.root_dir = '/dfsdata2/houfeng1_data/yjw/Dataset/luna16'
+        self.root_dir = '/path/to/your/data/set'
         self.raw_data_dir = '{}/data'.format(self.root_dir)
         # training data annotation helper
         self.seg_dir = '{}/seg'.format(self.root_dir)
@@ -45,7 +45,7 @@ class configs:
         # path to preprocessed data.
         self.pp_name = 'pp_norm'
         self.input_df_name = 'sorted_info_df.pickle'
-        self.pp_data_path = '/dfsdata2/houfeng1_data/yjw/Dataset/luna16/{}'.format(self.pp_name)
+        self.pp_data_path = '/path/to/your/data/set/{}'.format(self.pp_name)
         self.pp_test_data_path = self.pp_data_path #change if test_data in separate folder.
 
     
