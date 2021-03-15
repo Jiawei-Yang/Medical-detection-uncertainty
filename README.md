@@ -60,4 +60,4 @@ The base detector implementation is adapted from an existing work that achieves 
 ## Notes
 1. The method of enabling instance-level uncertainty can be applied to any ConvNet as the base detecotr. 
 2. More details about training strategy, model architecture descriptions, and result discussion will be released in a future publication.
-
+3. For some force majeure, I personally lost the access to my previous server account, so to the original code. This code has been faithfully recovered from the an aged old-version copy from the previously running one. So, if there is any bug, please let me know.
