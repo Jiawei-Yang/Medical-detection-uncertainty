@@ -463,7 +463,7 @@ class net(nn.Module):
 
         # list of output boxes for monitoring/plotting. each element is a list of boxes per batch element.
         box_results_list = [[] for _ in range(img.shape[0])]
-        detections, class_logits, pred_deltas = self.forward(img)
+        detections, class_logits, pred_deltas, class_var_logits = self.forward(img)
 
         # loop over batch
         for b in range(img.shape[0]):
@@ -492,7 +492,7 @@ class net(nn.Module):
             anchor_target_deltas = torch.from_numpy(anchor_target_deltas).float().cuda()
 
             # compute losses.
-            class_loss, neg_anchor_ix = compute_class_loss(anchor_class_match, class_logits[b],n_mci=self.n_mci)
+            class_loss, neg_anchor_ix = compute_class_loss(anchor_class_match, class_logits[b],n_mci=self.n_mci, pred_var_logits=class_var_logits[b])
             bbox_loss = compute_bbox_loss(anchor_target_deltas, pred_deltas[b], anchor_class_match)
 
             # add negative anchors used for loss to results_dict for monitoring.
@@ -590,12 +590,13 @@ class net(nn.Module):
         else:
             class_logits, bb_outputs = self.single_forward(img)
             flat_class_var = None
+            class_var_logits = None
 
         batch_ixs = torch.arange(class_logits.shape[0]).unsqueeze(1).repeat(1, class_logits.shape[1]).view(-1).cuda()
         flat_class_softmax = F.softmax(class_logits.view(-1, class_logits.shape[-1]), 1)
         flat_bb_outputs = bb_outputs.view(-1, bb_outputs.shape[-1])
         detections = refine_detections(self.anchors, flat_class_softmax, flat_bb_outputs, batch_ixs, pred_var=flat_class_var)
-        return detections, class_logits, bb_outputs       
+        return detections, class_logits, bb_outputs, class_var_logits     
     
     def mc_test_forward(self, img):
         class_logits_list, bb_output_list = [], []
